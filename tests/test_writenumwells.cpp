@@ -39,6 +39,10 @@
 #include <opm/parser/eclipse/EclipseState/Schedule/Schedule.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/Well.hpp>
 #include <opm/parser/eclipse/EclipseState/Grid/EclipseGrid.hpp>
+#include <opm/core/wells/WellsManager.hpp>
+#include <opm/core/grid/GridManager.hpp>
+#include <opm/core/props/IncompPropertiesFromDeck.hpp>
+#include <opm/core/simulator/TwophaseState.hpp>
 
 // ERT stuff
 #include <ert/ecl/ecl_kw.h>
@@ -165,6 +169,7 @@ BOOST_AUTO_TEST_CASE(EclipseWriteRestartWellInfo)
     std::string eclipse_restart_filename = "TESTBLACKOILSTATE3.UNRST";
 
     test_work_area_type * test_area = test_work_area_alloc("TEST_EclipseWriteNumWells");
+    test_work_area_set_store(test_area, true);
     test_work_area_copy_file(test_area, eclipse_data_filename.c_str());
 
     Opm::DeckConstPtr     deck = createDeck(eclipse_data_filename);
