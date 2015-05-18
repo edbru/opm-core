@@ -22,6 +22,7 @@
 
 #include <opm/core/wells.h>
 #include <opm/core/well_controls.h>
+#include <opm/parser/eclipse/EclipseState/EclipseState.hpp>
 #include <vector>
 #include <cassert>
 
@@ -37,10 +38,20 @@ namespace Opm
         /// wellRates() fields, depending on controls.  The
         /// perfRates() field is filled with zero, and perfPress()
         /// with -1e100.
+
+        // !!!!!! ****** ------
+        WellState (){
+            m_already_initiated = false;
+        }
+        // !!!!!! ****** ------
+
         template <class State>
         void init(const Wells* wells, const State& state)
         {
-            if (wells) {
+            // !!!!!! ****** ------
+            //if (wells) {
+            if (wells && !m_already_initiated) {
+            // !!!!!! ****** ------
                 const int nw = wells->number_of_wells;
                 const int np = wells->number_of_phases;
                 bhp_.resize(nw);
@@ -107,6 +118,30 @@ namespace Opm
             }
         }
 
+        void resize(const EclipseState& state, int reportStep)
+        {
+            std::vector<WellConstPtr> wells = state.getSchedule()->getWells(reportStep);
+            int numPhases = state.getNumPhases();
+            int size = 0;
+
+            for(int i = 0; i < wells.size(); i++){
+                int numCompl = wells[i]->getCompletions(reportStep)->size();
+                size += numCompl;
+            }
+
+            bhp_.resize(wells.size());
+            temperature_.resize(wells.size());
+            wellrates_.resize(wells.size() * numPhases);
+            perfrates_.resize(size); // Possibly multiply with numPhases?
+            perfpress_.resize(size);
+        }
+
+        // !!!!!! ****** ------
+        void setAlreadyInitiatedTo(bool already_initiated){
+            m_already_initiated = already_initiated;
+        }
+        // !!!!!! ****** ------
+
         /// One bhp pressure per well.
         std::vector<double>& bhp() { return bhp_; }
         const std::vector<double>& bhp() const { return bhp_; }
@@ -133,6 +168,8 @@ namespace Opm
         std::vector<double> wellrates_;
         std::vector<double> perfrates_;
         std::vector<double> perfpress_;
+
+        bool m_already_initiated; // !!!!!! ****** ------
     };
 
 } // namespace Opm
