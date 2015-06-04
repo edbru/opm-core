@@ -139,8 +139,11 @@ namespace Opm
                 WellIndex wi;
                 wi.wellNumber = i;
                 wi.numPhases = numPhases;
-                totNumCompls += getNumCompletions(wells[i], reportStep);
+                if (i > 0) {
+                    totNumCompls += getNumCompletions(wells[i-1], reportStep);
+                }
                 wi.wellNumberCompl = totNumCompls;
+                std::cout << "Setting wellNumCompl to " << totNumCompls << " for well " << wi.wellNumber << std::endl;
 
                 fillCompetionsMap(grid, wells[i], wi, reportStep);
 
@@ -179,16 +182,11 @@ namespace Opm
                         auto newComplIter = newWi.completionMap.find(completionId);
 
                         if(newComplIter != newWi.completionMap.end()){
-                            //const WellIndex& wi = (*oldIter).second;
-                            //size_t oldIndex = wi.wellNumber;
                             size_t oldComplIndex = (*oldComplIter).second;
                             size_t newComplIndex = (*newComplIter).second;
 
                             size_t oldComplStartIndex = wi.wellNumberCompl;
                             size_t newComplStartIndex = newWi.wellNumberCompl;
-
-                            //const WellIndex& newWi = (*newIter).second;
-                            //size_t newIndex = newWi.wellNumber;
 
                             perfrates_[newComplStartIndex + newComplIndex] = perfratesTemp[oldComplStartIndex + oldComplIndex];
                             perfpress_[newComplStartIndex + newComplIndex] = perfpressTemp[oldComplStartIndex + oldComplIndex];
@@ -411,12 +409,12 @@ namespace Opm
         std::vector<std::pair <std::string, double>> bhpPrevStep_;
         std::vector<std::pair <std::string, double>> temperaturePrevStep_;
 */
-
         std::map<std::string, WellIndex> wellIndexMap_;
+/*
         std::vector<double> wellratesPrevStep_;
         std::vector<double> perfratesPrevStep_;
         std::vector<double> perfpressPrevStep_;
-
+*/
         int getWellMapIndex(std::string wellName){
             int retVal = -1;
             auto iter = wellIndexMap_.find(wellName);
