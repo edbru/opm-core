@@ -460,6 +460,7 @@ namespace Opm
         void fillCompetionsMap(EclipseGridConstPtr& grid, WellPtr& well, WellIndex& wi, int reportStep){
             CompletionSetConstPtr complSet = well->getCompletions(reportStep);
 
+            size_t open_completions_count = 0;
             for (size_t idx = 0; idx < complSet->size(); idx++){
                 CompletionConstPtr completion = complSet->get(idx);
                 if(completion->getState() == WellCompletion::StateEnum::OPEN){
@@ -467,9 +468,9 @@ namespace Opm
                     int j = completion->getJ();
                     int k = completion->getK();
                     size_t globalIndex = grid->getGlobalIndex(i, j, k);
-
-                    std::pair <size_t, size_t> p(globalIndex, idx);
+                    std::pair <size_t, size_t> p(globalIndex, open_completions_count);
                     wi.completionMap.insert(p);
+                    ++open_completions_count;
                 }
             }
         }
