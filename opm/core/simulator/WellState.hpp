@@ -33,8 +33,7 @@ namespace Opm
 {
     struct WellIndex{
         size_t wellNumber;
-        size_t wellNumberCompl;
-        size_t numPhases;
+        size_t wellCompletionOffset;
         std::map<std::size_t, size_t> completionMap;
     };
 
@@ -117,8 +116,7 @@ namespace Opm
             }
         }
 
-        // !!!!!! ******
-        void resize(const EclipseState& state, int reportStep)
+        void resize(const EclipseState& state, size_t reportStep)
         {
             std::vector<WellPtr> wells = state.getSchedule()->getOpenWells(reportStep);
             int numPhases = state.getNumPhases();
@@ -134,19 +132,14 @@ namespace Opm
 
             std::map<std::string, WellIndex> newMap;
 
-            size_t totNumCompls = 0;
+            size_t totalWellCompletionOffset = 0;
             for (size_t i = 0; i < numWells; i++){
                 WellIndex wi;
                 wi.wellNumber = i;
-                wi.numPhases = numPhases;
-                if (i > 0) {
-                    totNumCompls += getNumCompletions(wells[i-1], reportStep);
-                }
-                wi.wellNumberCompl = totNumCompls;
-                std::cout << "Setting wellNumCompl to " << totNumCompls << " for well " << wi.wellNumber << std::endl;
+                wi.wellCompletionOffset = totalWellCompletionOffset;
 
-                fillCompetionsMap(grid, wells[i], wi, reportStep);
-
+                totalWellCompletionOffset += getNumCompletions(wells[i], reportStep);
+                fillCompletionsMap(grid, wells[i], wi, reportStep);
                 std::pair <std::string, WellIndex> p(wells[i]->name(), wi);
                 newMap.insert(p);
             }
@@ -162,8 +155,8 @@ namespace Opm
                 auto newIter = newMap.find(wellName);
 
                 if(newIter != newMap.end()){
-                    const WellIndex& wi = (*oldIter).second;
-                    size_t oldIndex = wi.wellNumber;
+                    const WellIndex& oldWi = (*oldIter).second;
+                    size_t oldIndex = oldWi.wellNumber;
 
                     const WellIndex& newWi = (*newIter).second;
                     size_t newIndex = newWi.wellNumber;
@@ -175,9 +168,7 @@ namespace Opm
                         wellrates_[newIndex * numPhases + i] = wellRatesTemp[oldIndex * numPhases + i];
                     }
 
-                    //fillPerfpressAndPerfrates(wi, newWi, oldIndex, newIndex, numCompl);
-                    // **********
-                    for (auto oldComplIter = wi.completionMap.begin(); oldComplIter != wi.completionMap.end(); ++oldComplIter){
+                    for (auto oldComplIter = oldWi.completionMap.begin(); oldComplIter != oldWi.completionMap.end(); ++oldComplIter){
                         size_t completionId = (*oldComplIter).first;
                         auto newComplIter = newWi.completionMap.find(completionId);
 
@@ -185,27 +176,26 @@ namespace Opm
                             size_t oldComplIndex = (*oldComplIter).second;
                             size_t newComplIndex = (*newComplIter).second;
 
-                            size_t oldComplStartIndex = wi.wellNumberCompl;
-                            size_t newComplStartIndex = newWi.wellNumberCompl;
+                            size_t oldWellCompletionOffset = oldWi.wellCompletionOffset;
+                            size_t newWellCompletionOffset = newWi.wellCompletionOffset;
 
-                            perfrates_[newComplStartIndex + newComplIndex] = perfratesTemp[oldComplStartIndex + oldComplIndex];
-                            perfpress_[newComplStartIndex + newComplIndex] = perfpressTemp[oldComplStartIndex + oldComplIndex];
+                            perfrates_[newWellCompletionOffset + newComplIndex] = perfratesTemp[oldWellCompletionOffset + oldComplIndex];
+                            perfpress_[newWellCompletionOffset + newComplIndex] = perfpressTemp[oldWellCompletionOffset + oldComplIndex];
                         }
                     }
-                    // **********
                 }
             }
 
             wellIndexMap_ = newMap;
         }
 
-        void setBhpValue(double value, size_t index){
+        void setBhpValue(size_t index, double value){
             if (index < bhp_.size()){
                 bhp_[index] = value;
             }
         }
 
-        void setBhpValue(double value, std::string wellName){
+        void setBhpValue(std::string wellName, double value){
             int index = getWellMapIndex(wellName);
 
             if(index > -1){
@@ -213,7 +203,7 @@ namespace Opm
             }
         }
 
-        double getBhpValue(size_t index){
+        double getBhpValue(size_t index) const{
             double retVal;
 
             if (index < bhp_.size()){
@@ -223,7 +213,7 @@ namespace Opm
             return retVal;
         }
 
-        double getBhpValue(std::string wellName){
+        double getBhpValue(std::string wellName) const{
             double retVal;
             int index = getWellMapIndex(wellName);
 
@@ -234,13 +224,13 @@ namespace Opm
             return retVal;
         }
 
-        void setTemperatureValue(double value, size_t index){
+        void setTemperatureValue(size_t index, double value){
             if (index < temperature_.size()){
                 temperature_[index] = value;
             }
         }
 
-        void setTemperatureValue(double value, std::string wellName){
+        void setTemperatureValue(std::string wellName, double value){
             int index = getWellMapIndex(wellName);
 
             if(index > -1){
@@ -248,7 +238,7 @@ namespace Opm
             }
         }
 
-        double getTemperatureValue(size_t index){
+        double getTemperatureValue(size_t index) const{
             double retVal;
 
             if (index < temperature_.size()){
@@ -258,7 +248,7 @@ namespace Opm
             return retVal;
         }
 
-        double getTemperatureValue(std::string wellName){
+        double getTemperatureValue(std::string wellName) const{
             double retVal;
             int index = getWellMapIndex(wellName);
 
@@ -269,22 +259,21 @@ namespace Opm
             return retVal;
         }
 
-        void setWellRatesValue(double value, size_t index){
+        void setWellRatesValue(size_t index, double value){
             if (index < wellrates_.size()){
                 wellrates_[index] = value;
             }
         }
 
-        void setWellRatesValue(double value, std::string wellName, size_t phase){
+        void setWellRatesValue(std::string wellName, size_t phase, size_t numPhases, double value){
             int index = getWellMapIndex(wellName);
-            int numPhases = getNumPhases();
 
             if((index > -1) && (phase <= numPhases) && (phase > 0)){
                 wellrates_[(index * numPhases) + (phase - 1)] = value;
             }
         }
 
-        double getWellRatesValue(size_t index){
+        double getWellRatesValue(size_t index) const{
             double retVal;
 
             if (index < wellrates_.size()){
@@ -294,10 +283,9 @@ namespace Opm
             return retVal;
         }
 
-        double getWellRatesValue(std::string wellName, size_t phase){
+        double getWellRatesValue(std::string wellName, size_t phase, size_t numPhases) const{
             double retVal;
             int index = getWellMapIndex(wellName);
-            int numPhases = getNumPhases();
 
             if((index > -1) && (phase <= numPhases) && (phase > 0)){
                 retVal = wellrates_[(index * numPhases) + (phase - 1)];
@@ -306,13 +294,13 @@ namespace Opm
             return retVal;
         }
 
-        void setPerfRatesValue(double value, size_t index){
+        void setPerfRatesValue(size_t index, double value){
             if (index < perfrates_.size()){
                 perfrates_[index] = value;
             }
         }
 
-        void setPerfRatesValue(double value, std::string wellName){
+        void setPerfRatesValue(std::string wellName, double value){
             int index = getWellMapIndex(wellName);
 
             if(index > -1){
@@ -320,7 +308,7 @@ namespace Opm
             }
         }
 
-        double getPerfRatesValue(size_t index){
+        double getPerfRatesValue(size_t index) const{
             double retVal;
 
             if (index < perfrates_.size()){
@@ -330,7 +318,7 @@ namespace Opm
             return retVal;
         }
 
-        double getPerfRatesValue(std::string wellName){
+        double getPerfRatesValue(std::string wellName) const{
             double retVal;
             int index = getWellMapIndex(wellName);
 
@@ -341,13 +329,13 @@ namespace Opm
             return retVal;
         }
 
-        void setPerfPressValue(double value, size_t index){
+        void setPerfPressValue(size_t index, double value){
             if (index < perfpress_.size()){
                 perfpress_[index] = value;
             }
         }
 
-        void setPerfPressValue(double value, std::string wellName){
+        void setPerfPressValue(std::string wellName, double value){
             int index = getWellMapIndex(wellName);
 
             if(index > -1){
@@ -355,7 +343,7 @@ namespace Opm
             }
         }
 
-        double getPerfPressValue(size_t index){
+        double getPerfPressValue(size_t index) const{
             double retVal;
 
             if (index < perfpress_.size()){
@@ -365,7 +353,7 @@ namespace Opm
             return retVal;
         }
 
-        double getPerfPressValue(std::string wellName){
+        double getPerfPressValue(std::string wellName) const{
             double retVal;
             int index = getWellMapIndex(wellName);
 
@@ -375,7 +363,6 @@ namespace Opm
 
             return retVal;
         }
-        // !!!!!! ******
 
         /// One bhp pressure per well.
         std::vector<double>& bhp() { return bhp_; }
@@ -403,19 +390,10 @@ namespace Opm
         std::vector<double> wellrates_;
         std::vector<double> perfrates_;
         std::vector<double> perfpress_;
-        // !!!!!! ******
 
-/* --
-        std::vector<std::pair <std::string, double>> bhpPrevStep_;
-        std::vector<std::pair <std::string, double>> temperaturePrevStep_;
-*/
         std::map<std::string, WellIndex> wellIndexMap_;
-/*
-        std::vector<double> wellratesPrevStep_;
-        std::vector<double> perfratesPrevStep_;
-        std::vector<double> perfpressPrevStep_;
-*/
-        int getWellMapIndex(std::string wellName){
+
+        int getWellMapIndex(std::string wellName) const{
             int retVal = -1;
             auto iter = wellIndexMap_.find(wellName);
 
@@ -427,12 +405,7 @@ namespace Opm
             return retVal;
         }
 
-        int getNumPhases(){
-            auto iter = wellIndexMap_.begin();
-            return (*iter).second.numPhases;
-        }
-
-        int getNumCompletions(std::vector<WellPtr>& wells, int reportStep){
+        int getNumCompletions(std::vector<WellPtr>& wells, int reportStep) const{
             int numCompl = 0;
 
             for(size_t i = 0; i < wells.size(); i++){
@@ -443,12 +416,13 @@ namespace Opm
             return numCompl;
         }
 
-        int getNumCompletions(WellPtr& well, int reportStep){
+        int getNumCompletions(WellPtr& well, int reportStep) const{
             int numComplForWell = 0;
             CompletionSetConstPtr complSet = well->getCompletions(reportStep);
 
             for (size_t i = 0; i < complSet->size(); i++){
                 WellCompletion::StateEnum complState = complSet->get(i)->getState();
+
                 if(complState == WellCompletion::StateEnum::OPEN){
                     numComplForWell++;
                 }
@@ -457,12 +431,13 @@ namespace Opm
             return numComplForWell;
         }   
 
-        void fillCompetionsMap(EclipseGridConstPtr& grid, WellPtr& well, WellIndex& wi, int reportStep){
+        void fillCompletionsMap(EclipseGridConstPtr& grid, WellPtr& well, WellIndex& wi, int reportStep) const{
             CompletionSetConstPtr complSet = well->getCompletions(reportStep);
-
             size_t open_completions_count = 0;
+
             for (size_t idx = 0; idx < complSet->size(); idx++){
                 CompletionConstPtr completion = complSet->get(idx);
+
                 if(completion->getState() == WellCompletion::StateEnum::OPEN){
                     int i = completion->getI();
                     int j = completion->getJ();
@@ -474,7 +449,6 @@ namespace Opm
                 }
             }
         }
-        // !!!!!! ******
     };
 
 } // namespace Opm
